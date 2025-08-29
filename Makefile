@@ -8,6 +8,8 @@ PREFIX ?= /usr/local
 BINDIR = $(PREFIX)/bin
 INSTALL ?= /usr/bin/install -c -m 755
 
+all: $(EXEC)
+
 $(EXEC): $(OBJ)
 	$(CC) $(OBJ) -o $(EXEC)
 
