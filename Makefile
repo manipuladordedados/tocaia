@@ -1,12 +1,12 @@
-CFLAGS = -std=c89 -Wall -pedantic
 CC ?= cc
+CFLAGS = -std=c89 -Wall -pedantic
 
 OBJ  = tocaia.o
 EXEC = tocaia
 
 PREFIX ?= /usr/local
 BINDIR = $(PREFIX)/bin
-INSTALL ?= /usr/bin/install -c -m 755
+INSTALL ?= install
 
 all: $(EXEC)
 
@@ -23,7 +23,7 @@ clean:
 
 install: $(EXEC)
 	mkdir -p $(DESTDIR)$(BINDIR)
-	$(INSTALL) $(EXEC) $(DESTDIR)$(BINDIR)/$(EXEC)
+	$(INSTALL) -m 755 $(EXEC) $(DESTDIR)$(BINDIR)/$(EXEC)
 
 uninstall:
 	rm -f $(DESTDIR)$(BINDIR)/$(EXEC)
