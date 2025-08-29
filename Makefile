@@ -1,28 +1,27 @@
 CFLAGS = -std=c89 -Wall -pedantic
-UNAME := $(shell uname)
-
-ifeq ($(UNAME), Linux)
-    CC = gcc
-endif
-ifeq ($(UNAME), OpenBSD)
-    CC = clang
-endif
-ifeq ($(UNAME), FreeBSD)
-    CC = clang
-endif
-ifeq ($(UNAME), NetBSD)
-    CC = clang
-endif
+CC ?= cc
 
 OBJ  = tocaia.o
 EXEC = tocaia
 
+PREFIX ?= /usr/local
+BINDIR = $(PREFIX)/bin
+INSTALL ?= /usr/bin/install -c -m 755
+
 $(EXEC): $(OBJ)
-	$(CC) $(OBJ) -o $@ $(LDFLAGS)
+	$(CC) $(OBJ) -o $(EXEC)
 
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
-.PHONY: clean
+.PHONY: clean install uninstall
+
 clean:
 	rm -f $(OBJ) $(EXEC)
+
+install: $(EXEC)
+	mkdir -p $(DESTDIR)$(BINDIR)
+	$(INSTALL) $(EXEC) $(DESTDIR)$(BINDIR)/$(EXEC)
+
+uninstall:
+	rm -f $(DESTDIR)$(BINDIR)/$(EXEC)

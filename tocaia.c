@@ -19,7 +19,7 @@
 #include <errno.h>
 #include <netinet/in.h>
 
-#define PROGRAM_VERSION "0.7.0"
+#define PROGRAM_VERSION "0.8.0"
 
 #define CRLF "\r\n"
 
@@ -82,6 +82,7 @@ typedef struct NavigationState {
 	int port;
 	char selector[MAX_SELECTOR_LENGTH];
 	char *page_content;
+	char type;
 	struct NavigationState *prev;
 	struct NavigationState *next;
 } NavigationState;
@@ -127,10 +128,10 @@ void draw_gopher_menu(AppState* state);
 void draw_text_viewer(AppState* state, const char *content);
 void show_about_screen(const AppState* state);
 
-NavigationState* create_nav_state(const char *host, int port, const char *selector);
+NavigationState* create_nav_state(const char *host, int port, const char *selector, char type);
 void free_forward_history(NavigationState *current_state);
 void free_navigation_history(NavigationState *head);
-void navigate_to(AppState *state, const char *host, int port, const char *selector);
+void navigate_to(AppState *state, const char *host, int port, const char *selector, char type);
 void navigate_back(AppState *state);
 void navigate_forward(AppState *state);
 
@@ -153,13 +154,14 @@ const char* get_gopher_type_description(char type);
 const char* get_gopher_item_color(char type, BOOL selected);
 void show_help(void);
 void show_version(void);
-BOOL parse_gopher_address(const char *address, char *host_out, int *port_out, char *selector_out);
+BOOL parse_gopher_address(const char *address, char *host_out, int *port_out, char *selector_out, char *type_out);
 
 int main(int argc, char *argv[]) {
 	AppState state;
 	char initial_host[MAX_HOST_LENGTH];
 	int initial_port;
 	char initial_selector[MAX_SELECTOR_LENGTH];
+	char initial_type;
 
 	if (argc < 2 || strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0) {
 		show_help();
@@ -171,7 +173,7 @@ int main(int argc, char *argv[]) {
 	}
 
 	/* Try to parse the Gopher address. If it fails, print an error and exit. */
-	if (!parse_gopher_address(argv[1], initial_host, &initial_port, initial_selector)) {
+	if (!parse_gopher_address(argv[1], initial_host, &initial_port, initial_selector, &initial_type)) {
 		die("Error: Invalid Gopher address format.");
 	}
 
@@ -184,7 +186,7 @@ int main(int argc, char *argv[]) {
 	memset(&state, 0, sizeof(AppState));
 	state.is_running = TRUE;
 	ioctl(STDOUT_FILENO, TIOCGWINSZ, &state.terminal_size);
-	navigate_to(&state, initial_host, initial_port, initial_selector);
+	navigate_to(&state, initial_host, initial_port, initial_selector, initial_type);
 
 	if (!state.current_nav) {
 		die("Error: Failed to initialize navigation state.");
@@ -515,7 +517,7 @@ void handle_menu_action(AppState *state, char input) {
 				if (selected.type == '7') {
 					handle_search_prompt(state, &selected);
 				} else {
-					navigate_to(state, selected.host, selected.port, selected.selector);
+					navigate_to(state, selected.host, selected.port, selected.selector, selected.type);
 				}
 				return; /* Action handled */
 			}
@@ -706,7 +708,7 @@ void handle_search_prompt(AppState *state, const GopherItem *item) {
 	if (i > 0) { /* If user entered a query */
 		if ((strlen(item->selector) + strlen(query) + 2) < sizeof(full_selector)) {
 			sprintf(full_selector, "%s\t%s", item->selector, query);
-			navigate_to(state, item->host, item->port, full_selector);
+			navigate_to(state, item->host, item->port, full_selector, item->type);
 		} else {
 			/* Handle the case where the combined string is too long. */
 			printf("%sError: Search query is too long.%s\n", ERROR_COLOR, COLOR_RESET);
@@ -720,6 +722,7 @@ void handle_open_prompt(AppState *state) {
 	char new_host[MAX_HOST_LENGTH];
 	int new_port;
 	char new_selector[MAX_SELECTOR_LENGTH];
+	char new_type;
 	int rows = state->terminal_size.ws_row;
 	int start_col = (state->terminal_size.ws_col - MAX_CONTENT_DISPLAY_WIDTH) / 2;
 	int i = 0;
@@ -765,8 +768,8 @@ void handle_open_prompt(AppState *state) {
 			return;
 		}
 
-		if (parse_gopher_address(url_input, new_host, &new_port, new_selector)) {
-			navigate_to(state, new_host, new_port, new_selector);
+		if (parse_gopher_address(url_input, new_host, &new_port, new_selector, &new_type)) {
+			navigate_to(state, new_host, new_port, new_selector, new_type);
 			return; /* Success */
 		} else {
 			clear_line(rows, state->terminal_size.ws_col);
@@ -792,7 +795,7 @@ void get_current_url(const NavigationState* nav, char* buffer, size_t size) {
 	} else {
 		required_size = strlen("gopher://") + strlen(nav->host) + 1 + 5 + 1 + strlen(nav->selector) + 1;
 		if (required_size < size) {
-			sprintf(buffer, "gopher://%s:%d/%s", nav->host, nav->port, nav->selector);
+			sprintf(buffer, "gopher://%s:%d/%c%s", nav->host, nav->port, nav->type, nav->selector);
 		} else {
 			buffer[0] = '\0';
 		}
@@ -1002,7 +1005,7 @@ void show_about_screen(const AppState* state) {
 }
 
 /* Creates and initializes a new NavigationState node. */
-NavigationState* create_nav_state(const char *host, int port, const char *selector) {
+NavigationState* create_nav_state(const char *host, int port, const char *selector, char type) {
 	NavigationState *new_state = malloc(sizeof(NavigationState));
 	if (!new_state) {
 		die("Error: Failed to allocate memory for navigation state.");
@@ -1016,6 +1019,7 @@ NavigationState* create_nav_state(const char *host, int port, const char *select
 	new_state->page_content = NULL;
 	new_state->prev = NULL;
 	new_state->next = NULL;
+	new_state->type = type;
 	return new_state;
 }
 
@@ -1062,8 +1066,8 @@ void free_navigation_history(NavigationState *current_state) {
 }
 
 /* Navigates to a new Gopher address and adds it to the history. */
-void navigate_to(AppState *state, const char *host, int port, const char *selector) {
-	NavigationState *new_state = create_nav_state(host, port, selector);
+void navigate_to(AppState *state, const char *host, int port, const char *selector, char type) {
+	NavigationState *new_state = create_nav_state(host, port, selector, type);
 
 	if (state->current_nav) {
 		free_forward_history(state->current_nav);
@@ -1370,7 +1374,7 @@ const char* get_gopher_item_color(char type, BOOL selected) {
 }
 
 /* Parses a Gopher address string into its host, port, and selector components. */
-BOOL parse_gopher_address(const char *address, char *host_out, int *port_out, char *selector_out) {
+BOOL parse_gopher_address(const char *address, char *host_out, int *port_out, char *selector_out, char *type_out) {
 	char temp_address[MAX_URL_INPUT_LENGTH];
 	const char *parse_ptr;
 	char *host_port_str, *port_str, *first_slash;
@@ -1393,12 +1397,17 @@ BOOL parse_gopher_address(const char *address, char *host_out, int *port_out, ch
 	*port_out = 70;
 	strncpy(selector_out, "", MAX_SELECTOR_LENGTH);
 	selector_out[MAX_SELECTOR_LENGTH - 1] = '\0';
+	*type_out = '1';
 
 	first_slash = strchr(parse_ptr, '/');
 	if (first_slash) {
 		*first_slash = '\0';
-		strncpy(selector_out, first_slash + 1, MAX_SELECTOR_LENGTH - 1);
-		selector_out[MAX_SELECTOR_LENGTH - 1] = '\0';
+		*type_out = *(first_slash + 1);
+		
+		if (strlen(first_slash + 1) > 1) {
+			strncpy(selector_out, first_slash + 2, MAX_SELECTOR_LENGTH - 1);
+			selector_out[MAX_SELECTOR_LENGTH - 1] = '\0';
+		}
 	}
 
 	port_str = strrchr(host_port_str, ':');

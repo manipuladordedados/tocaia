@@ -1,6 +1,6 @@
 # Tocaia  
 
-Tocaia is a simple and portable **Gopher** client built with **C89** and **POSIX** in mind. 
+Tocaia is a simple and portable **Gopher Client** built with **C89** and **POSIX** in mind. 
 It offers a **TUI** interface to explore Gopherspace, with support for menus, text files, searches, and back/forward navigation.
 
 <p align="center">
@@ -22,4 +22,4 @@ It offers a **TUI** interface to explore Gopherspace, with support for menus, te
 ```sh
 git clone https://github.com/manipuladordedados/tocaia.git
 cd tocaia
-make
+make install
